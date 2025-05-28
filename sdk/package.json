@@ -1,0 +1,60 @@
+{
+  "name": "@pddo/exchange-rate-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Exchange Rate API - 汇率API的TypeScript SDK",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepublishOnly": "bun run build",
+    "test": "bun test",
+    "lint": "eslint src --ext .ts",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "exchange-rate",
+    "currency",
+    "api",
+    "sdk",
+    "typescript",
+    "汇率",
+    "货币转换"
+  ],
+  "author": {
+    "name": "PDDO",
+    "email": "pub@pd.do"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/catpddo/exchange-rate.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/catpddo/exchange-rate#readme",
+  "bugs": {
+    "url": "https://github.com/catpddo/exchange-rate/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {},
+  "peerDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
