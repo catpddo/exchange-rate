@@ -27,8 +27,11 @@ async function batchOperationsExample() {
     const batchRates = await sdk.getBatchRates(ratePairs);
     
     batchRates.forEach((rate, index) => {
-      const [base, target] = ratePairs[index];
-      console.log(`${base} -> ${target}: ${rate.data}`);
+      const pair = ratePairs[index];
+      if (pair) {
+        const [base, target] = pair;
+        console.log(`${base} -> ${target}: ${rate.data}`);
+      }
     });
     console.log();
 
@@ -44,8 +47,11 @@ async function batchOperationsExample() {
     const batchResults = await sdk.batchConvert(conversions);
     
     batchResults.forEach((result, index) => {
-      const { from, to, amount } = conversions[index];
-      console.log(`${amount} ${from} = ${result.data.toFixed(2)} ${to} (汇率: ${result.rate.toFixed(4)})`);
+      const conversion = conversions[index];
+      if (conversion) {
+        const { from, to, amount } = conversion;
+        console.log(`${amount} ${from} = ${result.data.toFixed(2)} ${to} (汇率: ${result.rate.toFixed(4)})`);
+      }
     });
     console.log();
 

@@ -59,8 +59,6 @@ async function basicUsageExample() {
 }
 
 // 运行示例
-if (require.main === module) {
-  basicUsageExample().catch(console.error);
-}
+basicUsageExample().catch(console.error);
 
 export { basicUsageExample }; 
