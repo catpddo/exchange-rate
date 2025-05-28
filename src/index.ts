@@ -143,23 +143,36 @@ app.get(
 				last = res.data.conversion_rates;
 			}
 		}
+		
+		// 检查两个货币是否都存在
 		if (!last[baseCurrency]) {
-			return c.json({ error: 'Currency not found' }, 404);
+			return c.json({ error: `Base currency ${baseCurrency} not found` }, 404);
 		}
-		const result = translate(last, targetCurrency);
-		if (!result) {
-			return c.json({ error: 'Currency not found' }, 404);
+		if (!last[targetCurrency]) {
+			return c.json({ error: `Target currency ${targetCurrency} not found` }, 404);
 		}
+		
+		// 计算汇率：从baseCurrency到targetCurrency
+		// 由于last是以USD为基准的汇率，需要进行转换
+		// 公式：rate = (1 USD / baseCurrency rate) * (targetCurrency rate / 1 USD)
+		//      = targetCurrency rate / baseCurrency rate
+		const rate = last[targetCurrency] / last[baseCurrency];
+		
 		if (amount) {
 			return c.json({
 				message: 'Success',
-				data: result[targetCurrency] * amount,
-				rate: result[targetCurrency],
+				data: rate * amount,
+				rate: rate,
 				base_code: baseCurrency,
 				target_code: targetCurrency,
 			});
 		}
-		return c.json({ message: 'Success', data: result[targetCurrency], base_code: baseCurrency, target_code: targetCurrency });
+		return c.json({ 
+			message: 'Success', 
+			data: rate, 
+			base_code: baseCurrency, 
+			target_code: targetCurrency 
+		});
 	}
 );
 
