@@ -1,40 +1,174 @@
-/**
- * Welcome to Cloudflare Workers!
- *
- * This is a template for a Scheduled Worker: a Worker that can run on a
- * configurable interval:
- * https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Run `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"` to see your Worker in action
- * - Run `npm run deploy` to publish your Worker
- *
- * Bind resources to your Worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { Hono } from 'hono';
+import { prettyJSON } from 'hono/pretty-json';
+import { requestId } from 'hono/request-id';
+import { z } from 'zod';
+import { zValidator } from '@hono/zod-validator';
+import currencyCodes from 'currency-codes';
+
+interface CF_SECRET {
+	PASS: string;
+	API_KEY: string;
+}
+
+interface ExchangerateApiResponse {
+	result: 'success' | 'error';
+}
+
+interface ExchangerateApiResponseSuccess extends ExchangerateApiResponse {
+	result: 'success';
+	conversion_rates: Record<string, number>;
+	time_last_updated_unix: number;
+	time_last_updated_utc: string;
+	base_code: string;
+}
+
+interface ExchangerateApiResponseFailure extends ExchangerateApiResponse {
+	result: 'error';
+	'error-type': ExchangerateApiErrorType;
+}
+
+type ExchangerateApiErrorType = 'unsupported-code' | 'malformed-request' | 'invalid-key' | 'inactive-account' | 'quota-reached';
+
+const currencyCodesSet = new Set(currencyCodes.codes());
+const currencySchema = z
+	.string()
+	.min(1)
+	.length(3)
+	.toUpperCase()
+	.refine((code) => currencyCodesSet.has(code), 'Invalid currency code')
+	.transform((code) => code.toUpperCase());
+
+const app = new Hono<{ Bindings: Env & CF_SECRET }>();
+app.use(prettyJSON());
+app.use('*', requestId());
+app.notFound((c) => c.json({ error: 'Not Found' }, 404));
+
+async function update(env: Env & CF_SECRET) {
+	const url = new URL(`https://v6.exchangerate-api.com/v6/${env.API_KEY}/latest/USD`);
+	const res = await fetch(url);
+	const data: ExchangerateApiResponseSuccess | ExchangerateApiResponseFailure = await res.json();
+	if (data.result === 'success') {
+		await env.KV.put('last', JSON.stringify(data.conversion_rates));
+		return {
+			message: 'Update success',
+			data,
+		};
+	} else {
+		return {
+			error: data['error-type'],
+		};
+	}
+}
+function translate(conversion_rates: Record<string, number>, target_currency: string) {
+	const baseRate = conversion_rates[target_currency];
+	if (!baseRate) {
+		return null;
+	}
+	const result: Record<string, number> = {};
+	Object.entries(conversion_rates).forEach(([currency, rate]) => {
+		result[currency] = (1 / baseRate) * rate;
+	});
+	return result;
+}
+app.get(
+	'/update/:pass',
+	zValidator(
+		'param',
+		z.object({
+			pass: z.string().min(1),
+		})
+	),
+	async (c) => {
+		const { pass } = c.req.valid('param');
+		if (pass !== c.env.PASS) {
+			return c.json({ error: 'Invalid password' }, 401);
+		}
+
+		const res = await update(c.env);
+		if (res.error) {
+			return c.json({ error: res.error }, 400);
+		} else {
+			return c.json({ message: 'Update success', data: res.data });
+		}
+	}
+);
+
+app.get(
+	'/last/:currency',
+	zValidator(
+		'param',
+		z.object({
+			currency: currencySchema,
+		})
+	),
+	async (c) => {
+		const currency = c.req.param('currency');
+		let last: Record<string, number> | null = await c.env.KV.get('last', 'json');
+		if (!last) {
+			const res = await update(c.env);
+			if (res.error) {
+				return c.json({ error: res.error }, 400);
+			} else {
+				last = res.data.conversion_rates;
+			}
+		}
+		if (!last[currency]) {
+			return c.json({ error: 'Currency not found' }, 404);
+		}
+		return c.json({ message: 'Success', data: translate(last, currency) });
+	}
+);
+
+app.get(
+	'/:baseCurrency/:targetCurrency/:amount?',
+	zValidator(
+		'param',
+		z.object({
+			baseCurrency: currencySchema,
+			targetCurrency: currencySchema,
+			amount: z.number({ coerce: true }).optional(),
+		})
+	),
+	async (c) => {
+		const params = c.req.valid('param');
+		const baseCurrency = params.baseCurrency;
+		const targetCurrency = params.targetCurrency;
+		const amount = params.amount;
+		let last: Record<string, number> | null = await c.env.KV.get('last', 'json');
+		if (!last) {
+			const res = await update(c.env);
+			if (res.error) {
+				return c.json({ error: res.error }, 400);
+			} else {
+				last = res.data.conversion_rates;
+			}
+		}
+		if (!last[baseCurrency]) {
+			return c.json({ error: 'Currency not found' }, 404);
+		}
+		const result = translate(last, targetCurrency);
+		if (!result) {
+			return c.json({ error: 'Currency not found' }, 404);
+		}
+		if (amount) {
+			return c.json({
+				message: 'Success',
+				data: result[targetCurrency] * amount,
+				rate: result[targetCurrency],
+				base_code: baseCurrency,
+				target_code: targetCurrency,
+			});
+		}
+		return c.json({ message: 'Success', data: result[targetCurrency], base_code: baseCurrency, target_code: targetCurrency });
+	}
+);
 
 export default {
-	async fetch(req) {
-		const url = new URL(req.url);
-		url.pathname = '/__scheduled';
-		url.searchParams.append('cron', '* * * * *');
-		return new Response(`To test the scheduled handler, ensure you have used the "--test-scheduled" then try running "curl ${url.href}".`);
-	},
-
-	// The scheduled handler is invoked at the interval set in our wrangler.jsonc's
-	// [[triggers]] configuration.
-	async scheduled(event, env, ctx): Promise<void> {
-		// A Cron Trigger can make requests to other endpoints on the Internet,
-		// publish to a Queue, query a D1 Database, and much more.
-		//
-		// We'll keep it simple and make an API call to a Cloudflare API:
-		let resp = await fetch('https://api.cloudflare.com/client/v4/ips');
-		let wasSuccessful = resp.ok ? 'success' : 'fail';
-
-		// You could store this result in KV, write to a D1 Database, or publish to a Queue.
-		// In this template, we'll just log the result:
-		console.log(`trigger fired at ${event.cron}: ${wasSuccessful}`);
+	fetch: app.fetch,
+	scheduled: async (batch, env) => {
+		const res = await update(env as Env & CF_SECRET);
+		if (res.error) {
+			console.error(res.error);
+		}
 	},
 } satisfies ExportedHandler<Env>;

@@ -1,15 +1,38 @@
 {
 	"name": "exchange-rate",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"private": true,
+	"author": {
+		"name": "PDDO",
+		"email": "pub@pd.do"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/catpddo/exchange-rate.git"
+	},
+	"license": "MIT",
+	"keywords": [
+		"exchange",
+		"rate",
+		"currency"
+	],
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --test-scheduled",
 		"start": "wrangler dev --test-scheduled",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"cf-secret-pass": "wrangler secret put PASS",
+		"cf-secret-api-key": "wrangler secret put API_KEY"
 	},
 	"devDependencies": {
 		"typescript": "^5.5.2",
 		"wrangler": "^4.17.0"
+	},
+	"dependencies": {
+		"@hono/zod-validator": "^0.6.0",
+		"currency-codes": "^2.2.0",
+		"hono": "^4.7.10",
+		"hono-rate-limiter": "^0.4.2",
+		"zod": "^3.25.32"
 	}
 }
