@@ -93,10 +93,10 @@ app.get(
 	}
 );
 
-app.get('/encrypt/kraken/', async (c) => {
+app.get('/encrypt', async (c) => {
 	const encrypt = await c.env.KV.get(`kraken`, 'json');
 	if (encrypt) {
-		return c.json({ message: 'Success', data: encrypt });
+		return c.json({ message: 'Success', ...encrypt });
 	}
 	try {
 		const res = await fetch(`https://iapi.kraken.com/api/internal/markets/all/assets?sort_by=listing_date&quote_symbol=usd&tradable=true`, {
@@ -133,51 +133,11 @@ app.get('/encrypt/kraken/', async (c) => {
 		await c.env.KV.put(`kraken`, JSON.stringify(data.result), {
 			expirationTtl: 60 * 5,
 		});
-		return c.json({ message: 'Success', data: data.result });
+		return c.json({ message: 'Success', data: { ...data.result } });
 	} catch (error) {
 		console.error(error);
 	}
 });
-
-app.get(
-	'/encrypt/binance/:symbol',
-	zValidator(
-		'param',
-		z.object({
-			symbol: z
-				.string()
-				.min(1)
-				.regex(/^[A-Za-z]{2,7}$/, 'Invalid symbol')
-				.transform((symbol) => symbol.toUpperCase()),
-		})
-	),
-	async (c) => {
-		const symbol = c.req.param('symbol');
-		const encrypt = await c.env.KV.get(`encrypt:${symbol}`, 'json');
-		if (encrypt) {
-			return c.json({ message: 'Success', data: encrypt });
-		}
-		try {
-			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, {
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-					referer: 'https://www.binance.com/',
-				},
-			});
-			const data: { symbol: string; price: string } | { code: number; msg: string } = await res.json();
-			if ('code' in data) {
-				return c.json({ error: data.msg }, 400);
-			}
-			await c.env.KV.put(`encrypt:${symbol}`, JSON.stringify(data), {
-				expirationTtl: 60 * 5,
-			});
-			return c.json({ message: 'Success', data: data });
-		} catch (error) {
-			console.error(error);
-			return c.json({ error: 'Internal server error' }, 500);
-		}
-	}
-);
 
 app.get(
 	'/last/:currency',
