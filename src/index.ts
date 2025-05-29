@@ -94,6 +94,40 @@ app.get(
 );
 
 app.get(
+	'/encrypt/:symbol',
+	zValidator(
+		'param',
+		z.object({
+			symbol: z
+				.string()
+				.min(1)
+				.regex(/^[A-Z]{2,7}$/, 'Invalid symbol')
+				.transform((symbol) => symbol.toUpperCase()),
+		})
+	),
+	async (c) => {
+		const symbol = c.req.param('symbol');
+		const encrypt = await c.env.KV.get(`encrypt:${symbol}`, 'json');
+		if (encrypt) {
+			return c.json({ message: 'Success', data: encrypt });
+		}
+		try {
+			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+			const data: { symbol: string; price: string } | { code: number; msg: string } = await res.json();
+			if ('code' in data) {
+				return c.json({ error: data.msg }, 400);
+			}
+			await c.env.KV.put(`encrypt:${symbol}`, JSON.stringify(data), {
+				expirationTtl: 60 * 5,
+			});
+			return c.json({ message: 'Success', data: data });
+		} catch (error) {
+			return c.json({ error: 'Internal server error' }, 500);
+		}
+	}
+);
+
+app.get(
 	'/last/:currency',
 	zValidator(
 		'param',
@@ -173,36 +207,6 @@ app.get(
 			base_code: baseCurrency,
 			target_code: targetCurrency,
 		});
-	}
-);
-
-app.get(
-	'/encrypt/:symbol',
-	zValidator(
-		'param',
-		z.object({
-			symbol: z.string().min(1),
-		})
-	),
-	async (c) => {
-		const symbol = c.req.param('symbol');
-		const encrypt = await c.env.KV.get(`encrypt:${symbol}`, 'json');
-		if (encrypt) {
-			return c.json({ message: 'Success', data: encrypt });
-		}
-		try {
-			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-			const data: { symbol: string; price: string } | { code: number; msg: string } = await res.json();
-			if ('code' in data) {
-				return c.json({ error: data.msg }, 400);
-			}
-			await c.env.KV.put(`encrypt:${symbol}`, JSON.stringify(data), {
-				expirationTtl: 60 * 5,
-			});
-			return c.json({ message: 'Success', data: data });
-		} catch (error) {
-			return c.json({ error: 'Internal server error' }, 500);
-		}
 	}
 );
 
