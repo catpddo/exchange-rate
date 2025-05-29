@@ -143,7 +143,7 @@ app.get(
 				last = res.data.conversion_rates;
 			}
 		}
-		
+
 		// 检查两个货币是否都存在
 		if (!last[baseCurrency]) {
 			return c.json({ error: `Base currency ${baseCurrency} not found` }, 404);
@@ -151,13 +151,13 @@ app.get(
 		if (!last[targetCurrency]) {
 			return c.json({ error: `Target currency ${targetCurrency} not found` }, 404);
 		}
-		
+
 		// 计算汇率：从baseCurrency到targetCurrency
 		// 由于last是以USD为基准的汇率，需要进行转换
 		// 公式：rate = (1 USD / baseCurrency rate) * (targetCurrency rate / 1 USD)
 		//      = targetCurrency rate / baseCurrency rate
 		const rate = last[targetCurrency] / last[baseCurrency];
-		
+
 		if (amount) {
 			return c.json({
 				message: 'Success',
@@ -167,12 +167,42 @@ app.get(
 				target_code: targetCurrency,
 			});
 		}
-		return c.json({ 
-			message: 'Success', 
-			data: rate, 
-			base_code: baseCurrency, 
-			target_code: targetCurrency 
+		return c.json({
+			message: 'Success',
+			data: rate,
+			base_code: baseCurrency,
+			target_code: targetCurrency,
 		});
+	}
+);
+
+app.get(
+	'/encrypt/:symbol',
+	zValidator(
+		'param',
+		z.object({
+			symbol: z.string().min(1),
+		})
+	),
+	async (c) => {
+		const symbol = c.req.param('symbol');
+		const encrypt = await c.env.KV.get(`encrypt:${symbol}`, 'json');
+		if (encrypt) {
+			return c.json({ message: 'Success', data: encrypt });
+		}
+		try {
+			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+			const data: { symbol: string; price: string } | { code: number; msg: string } = await res.json();
+			if ('code' in data) {
+				return c.json({ error: data.msg }, 400);
+			}
+			await c.env.KV.put(`encrypt:${symbol}`, JSON.stringify(data), {
+				expirationTtl: 60 * 5,
+			});
+			return c.json({ message: 'Success', data: data });
+		} catch (error) {
+			return c.json({ error: 'Internal server error' }, 500);
+		}
 	}
 );
 
