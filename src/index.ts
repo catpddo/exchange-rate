@@ -93,8 +93,54 @@ app.get(
 	}
 );
 
+app.get('/encrypt/kraken/', async (c) => {
+	const encrypt = await c.env.KV.get(`kraken`, 'json');
+	if (encrypt) {
+		return c.json({ message: 'Success', data: encrypt });
+	}
+	try {
+		const res = await fetch(`https://iapi.kraken.com/api/internal/markets/all/assets?sort_by=listing_date&quote_symbol=usd&tradable=true`, {
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+				referer: 'https://www.kraken.com/',
+			},
+		});
+		const data: {
+			result: {
+				data: {
+					rank: number;
+					symbol: string;
+					name: string;
+					price: string;
+					volume_24h: string;
+					market_cap: string;
+					change_pct_1h: string;
+					change_pct_24h: string;
+					change_pct_1w: string;
+					change_pct_1m: string;
+					change_pct_1y: string;
+					tradable: boolean;
+					listing_date: number;
+					trending_rank: number;
+					categories: string[];
+				}[];
+				count: number;
+				count_tradable: number;
+				total_results: number;
+			};
+			errors: string[];
+		} = await res.json();
+		await c.env.KV.put(`kraken`, JSON.stringify(data.result), {
+			expirationTtl: 60 * 5,
+		});
+		return c.json({ message: 'Success', data: data.result });
+	} catch (error) {
+		console.error(error);
+	}
+});
+
 app.get(
-	'/encrypt/:symbol',
+	'/encrypt/binance/:symbol',
 	zValidator(
 		'param',
 		z.object({
@@ -112,7 +158,12 @@ app.get(
 			return c.json({ message: 'Success', data: encrypt });
 		}
 		try {
-			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+			const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, {
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+					referer: 'https://www.binance.com/',
+				},
+			});
 			const data: { symbol: string; price: string } | { code: number; msg: string } = await res.json();
 			if ('code' in data) {
 				return c.json({ error: data.msg }, 400);
