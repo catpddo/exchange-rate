@@ -101,7 +101,7 @@ app.get(
 			symbol: z
 				.string()
 				.min(1)
-				.regex(/^[A-Z]{2,7}$/, 'Invalid symbol')
+				.regex(/^[A-Za-z]{2,7}$/, 'Invalid symbol')
 				.transform((symbol) => symbol.toUpperCase()),
 		})
 	),
@@ -122,6 +122,7 @@ app.get(
 			});
 			return c.json({ message: 'Success', data: data });
 		} catch (error) {
+			console.error(error);
 			return c.json({ error: 'Internal server error' }, 500);
 		}
 	}
